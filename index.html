@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Interactive Scene</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .instruction {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <h1 class="text-2xl font-bold opacity-90">Three.js 3D Viewport</h1>
+        <p class="text-sm opacity-70">Interactive Geometry Exploration</p>
+    </div>
+
+    <div class="instruction">
+        마우스를 드래그하여 화면을 회전시키세요
+    </div>
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let scene, camera, renderer, objects = [];
+        const referenceImageUrl = "file:///C:/Users/ykshi/.cursor/projects/c-Users-ykshi-OneDrive-Desktop-cursor-3D/assets/c__Users_ykshi_AppData_Roaming_Cursor_User_workspaceStorage_f54352b8d71b35e15637cf27dd7c44cb_images_image-a837fafe-9deb-4623-8988-83a3a4118c92.png";
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let targetRotation = { x: 0.2, y: 0.5 };
+        const holderObjects = [];
+
+        function createCandleHolder(options = {}) {
+            const {
+                scale = 1,
+                isHero = false,
+                hueOffset = 0,
+                spinSpeed = 0.0035,
+                glowIntensity = 2.0
+            } = options;
+
+            const holderGroup = new THREE.Group();
+
+            const shellGeo = new THREE.SphereGeometry(3.6, 128, 128);
+            const shellColor = new THREE.Color().setHSL(0.1 + hueOffset, 0.52, 0.52);
+            const shellMat = new THREE.MeshPhysicalMaterial({
+                color: shellColor,
+                metalness: 0.02,
+                roughness: 0.32,
+                transmission: 0.9,
+                thickness: 0.85,
+                ior: 1.45,
+                transparent: true,
+                opacity: 0.92,
+                clearcoat: 1,
+                clearcoatRoughness: 0.22,
+                emissive: 0x3b2200,
+                emissiveIntensity: isHero ? 0.22 : 0.16
+            });
+            const shell = new THREE.Mesh(shellGeo, shellMat);
+            holderGroup.add(shell);
+
+            const innerGlassGeo = new THREE.SphereGeometry(2.45, 64, 64);
+            const innerGlassMat = new THREE.MeshStandardMaterial({
+                color: 0xffbd66,
+                emissive: 0xff7e1f,
+                emissiveIntensity: isHero ? 0.6 : 0.45,
+                transparent: true,
+                opacity: 0.74,
+                roughness: 0.5,
+                metalness: 0.05
+            });
+            const innerCore = new THREE.Mesh(innerGlassGeo, innerGlassMat);
+            holderGroup.add(innerCore);
+
+            const baseRingGeo = new THREE.TorusGeometry(3.2, 0.23, 32, 120);
+            const baseRingMat = new THREE.MeshStandardMaterial({
+                color: 0xb6762e,
+                roughness: 0.3,
+                metalness: 0.35
+            });
+            const baseRing = new THREE.Mesh(baseRingGeo, baseRingMat);
+            baseRing.rotation.x = Math.PI / 2;
+            baseRing.position.y = -2.8;
+            holderGroup.add(baseRing);
+
+            const candleLight = new THREE.PointLight(0xffa33d, glowIntensity, 35, 2);
+            candleLight.position.set(0, 0.25, 0);
+            holderGroup.add(candleLight);
+
+            holderGroup.scale.setScalar(scale);
+            holderGroup.userData = {
+                isHolderObject: true,
+                isHeroObject: isHero,
+                pulse: Math.random() * Math.PI * 2,
+                spinSpeed,
+                floatSpeed: 0.7 + Math.random() * 0.8,
+                floatAmp: isHero ? 0.2 : 0.45 + Math.random() * 0.35,
+                baseScale: scale,
+                baseX: 0,
+                baseY: 0,
+                baseZ: 0,
+                orbitAmp: isHero ? 0 : 0.6 + Math.random() * 1.2,
+                orbitSpeed: 0.25 + Math.random() * 0.3,
+                orbitPhase: Math.random() * Math.PI * 2,
+                shellMat,
+                innerGlassMat
+            };
+
+            return holderGroup;
+        }
+
+        function init() {
+            // 1. Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a12);
+            scene.fog = new THREE.Fog(0x0a0a12, 10, 50);
+
+            // 2. Camera Setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 25;
+
+            // 3. Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // 4. Lights
+            const ambientLight = new THREE.AmbientLight(0xffecd1, 0.42);
+            scene.add(ambientLight);
+
+            const pointLight1 = new THREE.PointLight(0xffb347, 1.6, 80);
+            pointLight1.position.set(8, 10, 10);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0x8ec5ff, 0.65, 80);
+            pointLight2.position.set(-12, -8, 12);
+            scene.add(pointLight2);
+
+            // 5. Objects Creation (Random Shapes)
+            const geometries = [
+                new THREE.IcosahedronGeometry(1, 0),
+                new THREE.TorusGeometry(0.7, 0.2, 16, 100),
+                new THREE.OctahedronGeometry(1, 0),
+                new THREE.BoxGeometry(1, 1, 1)
+            ];
+
+            for (let i = 0; i < 50; i++) {
+                const material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(Math.random(), 0.7, 0.5),
+                    metalness: 0.7,
+                    roughness: 0.2,
+                    wireframe: Math.random() > 0.8
+                });
+
+                const geo = geometries[Math.floor(Math.random() * geometries.length)];
+                const mesh = new THREE.Mesh(geo, material);
+
+                mesh.position.set(
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40,
+                    (Math.random() - 0.5) * 40
+                );
+
+                mesh.rotation.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
+                
+                // 애니메이션 속성 저장
+                mesh.userData = {
+                    rotSpeedX: (Math.random() - 0.5) * 0.02,
+                    rotSpeedY: (Math.random() - 0.5) * 0.02,
+                    floatSpeed: (Math.random() - 0.5) * 0.01,
+                    originalY: mesh.position.y
+                };
+
+                scene.add(mesh);
+                objects.push(mesh);
+            }
+
+            // 중앙 캔들홀더 1개 배치
+            const centerHolder = createCandleHolder({
+                scale: 1.08,
+                isHero: true,
+                hueOffset: 0,
+                spinSpeed: 0.0038,
+                glowIntensity: 2.4
+            });
+            centerHolder.position.set(0, 0, 0);
+            centerHolder.userData.baseX = centerHolder.position.x;
+            centerHolder.userData.baseY = centerHolder.position.y;
+            centerHolder.userData.baseZ = centerHolder.position.z;
+            scene.add(centerHolder);
+            objects.push(centerHolder);
+            holderObjects.push(centerHolder);
+
+            // 주변에 변형된 캔들홀더 10개 배치
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const radius = 12 + Math.random() * 6;
+                const holder = createCandleHolder({
+                    scale: 0.5 + Math.random() * 0.35,
+                    isHero: false,
+                    hueOffset: (Math.random() - 0.5) * 0.03,
+                    spinSpeed: 0.002 + Math.random() * 0.0025,
+                    glowIntensity: 1.0 + Math.random() * 0.8
+                });
+
+                holder.position.set(
+                    Math.cos(angle) * radius,
+                    -2 + (Math.random() - 0.5) * 6,
+                    Math.sin(angle) * (radius * 0.85)
+                );
+                holder.rotation.y = Math.random() * Math.PI * 2;
+                holder.userData.baseX = holder.position.x;
+                holder.userData.baseY = holder.position.y;
+                holder.userData.baseZ = holder.position.z;
+
+                scene.add(holder);
+                objects.push(holder);
+                holderObjects.push(holder);
+            }
+
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+                referenceImageUrl,
+                (texture) => {
+                    texture.encoding = THREE.sRGBEncoding;
+                    texture.wrapS = THREE.RepeatWrapping;
+                    texture.wrapT = THREE.RepeatWrapping;
+                    texture.repeat.set(1.15, 1);
+                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+                    holderObjects.forEach((holder) => {
+                        holder.userData.shellMat.map = texture;
+                        holder.userData.shellMat.bumpMap = texture;
+                        holder.userData.shellMat.bumpScale = holder.userData.isHeroObject ? 0.23 : 0.16;
+                        holder.userData.shellMat.roughnessMap = texture;
+                        holder.userData.shellMat.emissiveMap = texture;
+                        holder.userData.shellMat.needsUpdate = true;
+
+                        holder.userData.innerGlassMat.map = texture;
+                        holder.userData.innerGlassMat.emissiveMap = texture;
+                        holder.userData.innerGlassMat.needsUpdate = true;
+                    });
+                },
+                undefined,
+                () => {
+                    console.warn("이미지 텍스처 로딩에 실패했습니다.");
+                }
+            );
+
+            // 6. Interaction Events
+            window.addEventListener('mousedown', (e) => { isDragging = true; });
+            window.addEventListener('mouseup', (e) => { isDragging = false; });
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('resize', onWindowResize);
+            
+            // Mobile support
+            window.addEventListener('touchstart', (e) => { isDragging = true; });
+            window.addEventListener('touchend', (e) => { isDragging = false; });
+            window.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 0) {
+                    handleMouseMove({
+                        clientX: e.touches[0].clientX,
+                        clientY: e.touches[0].clientY
+                    });
+                }
+            });
+        }
+
+        function handleMouseMove(e) {
+            if (isDragging) {
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                targetRotation.y += deltaX * 0.005;
+                targetRotation.x += deltaY * 0.005;
+            }
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = Date.now() * 0.001;
+
+            // 카메라 시점 부드럽게 보간 (Lerp)
+            camera.position.x += (Math.sin(targetRotation.y) * 25 - camera.position.x) * 0.05;
+            camera.position.y += (Math.sin(targetRotation.x) * 25 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            // 오브젝트 애니메이션
+            objects.forEach((obj, index) => {
+                if (obj.userData.rotSpeedX) {
+                    obj.rotation.x += obj.userData.rotSpeedX;
+                    obj.rotation.y += obj.userData.rotSpeedY;
+                    obj.position.y = obj.userData.originalY + Math.sin(time + index) * 2;
+                } else if (obj.userData.isHolderObject) {
+                    obj.rotation.y += obj.userData.spinSpeed;
+                    obj.rotation.x = Math.sin(time * 0.55 + obj.userData.pulse) * 0.05;
+                    obj.position.y = obj.userData.baseY + Math.sin(time * obj.userData.floatSpeed + obj.userData.pulse) * obj.userData.floatAmp;
+
+                    if (!obj.userData.isHeroObject) {
+                        obj.position.x = obj.userData.baseX + Math.cos(time * obj.userData.orbitSpeed + obj.userData.orbitPhase) * obj.userData.orbitAmp;
+                        obj.position.z = obj.userData.baseZ + Math.sin(time * obj.userData.orbitSpeed + obj.userData.orbitPhase) * obj.userData.orbitAmp;
+                    }
+
+                    const pulse = obj.userData.baseScale + Math.sin(time * 2.2 + obj.userData.pulse) * (obj.userData.isHeroObject ? 0.03 : 0.018);
+                    obj.scale.set(pulse, pulse, pulse);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            init();
+            animate();
+        };
+    </script>
+</body>
+</html>

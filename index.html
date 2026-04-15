@@ -44,10 +44,14 @@
     <script>
         let scene, camera, renderer, objects = [];
         const referenceImageUrl = "file:///C:/Users/ykshi/.cursor/projects/c-Users-ykshi-OneDrive-Desktop-cursor-3D/assets/c__Users_ykshi_AppData_Roaming_Cursor_User_workspaceStorage_f54352b8d71b35e15637cf27dd7c44cb_images_image-a837fafe-9deb-4623-8988-83a3a4118c92.png";
+        const necklaceImageUrl = "file:///C:/Users/ykshi/.cursor/projects/c-Users-ykshi-OneDrive-Desktop-cursor-3D/assets/c__Users_ykshi_AppData_Roaming_Cursor_User_workspaceStorage_f54352b8d71b35e15637cf27dd7c44cb_images_image-4002a5f6-8b44-49f3-834b-fa363dbda81e.png";
+        const spiralRingImageUrl = "file:///C:/Users/ykshi/.cursor/projects/c-Users-ykshi-OneDrive-Desktop-cursor-3D/assets/c__Users_ykshi_AppData_Roaming_Cursor_User_workspaceStorage_f54352b8d71b35e15637cf27dd7c44cb_images_image-faefa892-65bf-4a5a-911f-f54a2f2ee409.png";
+        const bandRingImageUrl = "file:///C:/Users/ykshi/.cursor/projects/c-Users-ykshi-OneDrive-Desktop-cursor-3D/assets/c__Users_ykshi_AppData_Roaming_Cursor_User_workspaceStorage_f54352b8d71b35e15637cf27dd7c44cb_images_image-6d2ba6a6-7290-41ae-acac-3f9810c82f17.png";
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         let targetRotation = { x: 0.2, y: 0.5 };
         const holderObjects = [];
+        const jewelryObjects = [];
 
         function createCandleHolder(options = {}) {
             const {
@@ -127,6 +131,138 @@
             };
 
             return holderGroup;
+        }
+
+        function applyTextureSettings(texture, repeatX = 1, repeatY = 1) {
+            texture.encoding = THREE.sRGBEncoding;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(repeatX, repeatY);
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        }
+
+        function createJewelryObjects() {
+            // 1) Necklace-inspired arc with dangling pendants
+            const necklaceGroup = new THREE.Group();
+            const necklaceMat = new THREE.MeshStandardMaterial({
+                color: 0xf2c66d,
+                metalness: 0.82,
+                roughness: 0.22
+            });
+            const necklaceArc = new THREE.Mesh(
+                new THREE.TorusGeometry(5, 0.28, 24, 220, Math.PI * 1.28),
+                necklaceMat
+            );
+            necklaceArc.rotation.x = Math.PI * 0.5;
+            necklaceArc.rotation.z = Math.PI;
+            necklaceArc.position.y = 0.2;
+            necklaceGroup.add(necklaceArc);
+
+            const pendantMat = new THREE.MeshPhysicalMaterial({
+                color: 0xf8efe1,
+                metalness: 0.06,
+                roughness: 0.28,
+                transmission: 0.55,
+                thickness: 0.22
+            });
+
+            for (let i = 0; i < 7; i++) {
+                const t = -0.46 + (i / 6) * 0.92;
+                const x = Math.sin(t * Math.PI) * 4.4;
+                const y = -2.3 - Math.cos(t * Math.PI) * 0.32;
+
+                const link = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.14, 0.03, 10, 24),
+                    necklaceMat
+                );
+                link.position.set(x, y + 0.32, 0.15);
+                link.rotation.x = Math.PI / 2;
+                necklaceGroup.add(link);
+
+                const pendant = new THREE.Mesh(
+                    new THREE.SphereGeometry(i === 3 ? 0.42 : 0.3, 24, 24),
+                    pendantMat
+                );
+                pendant.position.set(x, y - (i === 3 ? 0.24 : 0.08), 0.1);
+                pendant.scale.y = i === 3 ? 1.25 : 1.15;
+                necklaceGroup.add(pendant);
+            }
+
+            necklaceGroup.position.set(-12, 2.5, -7);
+            necklaceGroup.rotation.y = 0.58;
+            necklaceGroup.userData = {
+                isJewelryObject: true,
+                kind: "necklace",
+                pulse: Math.random() * Math.PI * 2,
+                baseX: necklaceGroup.position.x,
+                baseY: necklaceGroup.position.y,
+                baseZ: necklaceGroup.position.z,
+                spinSpeed: 0.0022,
+                orbitSpeed: 0.22,
+                orbitAmp: 1.1,
+                materials: [necklaceMat, pendantMat]
+            };
+            scene.add(necklaceGroup);
+            objects.push(necklaceGroup);
+            jewelryObjects.push(necklaceGroup);
+
+            // 2) Spiral ring-inspired object
+            const spiralMat = new THREE.MeshPhysicalMaterial({
+                color: 0xd9a43b,
+                metalness: 0.95,
+                roughness: 0.24,
+                clearcoat: 1,
+                clearcoatRoughness: 0.2
+            });
+            const spiralRing = new THREE.Mesh(
+                new THREE.TorusKnotGeometry(1.85, 0.42, 180, 24, 2, 9),
+                spiralMat
+            );
+            spiralRing.position.set(10.8, -1.8, -8.5);
+            spiralRing.rotation.set(0.62, 0.5, -0.3);
+            spiralRing.userData = {
+                isJewelryObject: true,
+                kind: "spiralRing",
+                pulse: Math.random() * Math.PI * 2,
+                baseX: spiralRing.position.x,
+                baseY: spiralRing.position.y,
+                baseZ: spiralRing.position.z,
+                spinSpeed: 0.0045,
+                orbitSpeed: 0.27,
+                orbitAmp: 0.9,
+                materials: [spiralMat]
+            };
+            scene.add(spiralRing);
+            objects.push(spiralRing);
+            jewelryObjects.push(spiralRing);
+
+            // 3) Hammered band-inspired object
+            const bandMat = new THREE.MeshStandardMaterial({
+                color: 0xe7bd62,
+                metalness: 0.88,
+                roughness: 0.3
+            });
+            const bandRing = new THREE.Mesh(
+                new THREE.TorusGeometry(2.45, 0.62, 32, 190),
+                bandMat
+            );
+            bandRing.position.set(0, -8.4, -9.5);
+            bandRing.rotation.set(1.28, 0.32, 0.08);
+            bandRing.userData = {
+                isJewelryObject: true,
+                kind: "bandRing",
+                pulse: Math.random() * Math.PI * 2,
+                baseX: bandRing.position.x,
+                baseY: bandRing.position.y,
+                baseZ: bandRing.position.z,
+                spinSpeed: 0.003,
+                orbitSpeed: 0.2,
+                orbitAmp: 0.75,
+                materials: [bandMat]
+            };
+            scene.add(bandRing);
+            objects.push(bandRing);
+            jewelryObjects.push(bandRing);
         }
 
         function init() {
@@ -243,11 +379,7 @@
             textureLoader.load(
                 referenceImageUrl,
                 (texture) => {
-                    texture.encoding = THREE.sRGBEncoding;
-                    texture.wrapS = THREE.RepeatWrapping;
-                    texture.wrapT = THREE.RepeatWrapping;
-                    texture.repeat.set(1.15, 1);
-                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    applyTextureSettings(texture, 1.15, 1);
 
                     holderObjects.forEach((holder) => {
                         holder.userData.shellMat.map = texture;
@@ -265,6 +397,65 @@
                 undefined,
                 () => {
                     console.warn("이미지 텍스처 로딩에 실패했습니다.");
+                }
+            );
+
+            createJewelryObjects();
+            textureLoader.load(
+                necklaceImageUrl,
+                (texture) => {
+                    applyTextureSettings(texture, 1.4, 1);
+                    const necklace = jewelryObjects.find((obj) => obj.userData.kind === "necklace");
+                    if (necklace) {
+                        necklace.userData.materials.forEach((mat) => {
+                            mat.map = texture;
+                            mat.bumpMap = texture;
+                            mat.bumpScale = 0.14;
+                            mat.needsUpdate = true;
+                        });
+                    }
+                },
+                undefined,
+                () => {
+                    console.warn("목걸이 텍스처 로딩에 실패했습니다.");
+                }
+            );
+
+            textureLoader.load(
+                spiralRingImageUrl,
+                (texture) => {
+                    applyTextureSettings(texture, 2.2, 1);
+                    const spiralRing = jewelryObjects.find((obj) => obj.userData.kind === "spiralRing");
+                    if (spiralRing) {
+                        spiralRing.userData.materials[0].map = texture;
+                        spiralRing.userData.materials[0].roughnessMap = texture;
+                        spiralRing.userData.materials[0].bumpMap = texture;
+                        spiralRing.userData.materials[0].bumpScale = 0.22;
+                        spiralRing.userData.materials[0].needsUpdate = true;
+                    }
+                },
+                undefined,
+                () => {
+                    console.warn("스파이럴 링 텍스처 로딩에 실패했습니다.");
+                }
+            );
+
+            textureLoader.load(
+                bandRingImageUrl,
+                (texture) => {
+                    applyTextureSettings(texture, 1.8, 1);
+                    const bandRing = jewelryObjects.find((obj) => obj.userData.kind === "bandRing");
+                    if (bandRing) {
+                        bandRing.userData.materials[0].map = texture;
+                        bandRing.userData.materials[0].roughnessMap = texture;
+                        bandRing.userData.materials[0].bumpMap = texture;
+                        bandRing.userData.materials[0].bumpScale = 0.26;
+                        bandRing.userData.materials[0].needsUpdate = true;
+                    }
+                },
+                undefined,
+                () => {
+                    console.warn("밴드 링 텍스처 로딩에 실패했습니다.");
                 }
             );
 
@@ -332,6 +523,11 @@
 
                     const pulse = obj.userData.baseScale + Math.sin(time * 2.2 + obj.userData.pulse) * (obj.userData.isHeroObject ? 0.03 : 0.018);
                     obj.scale.set(pulse, pulse, pulse);
+                } else if (obj.userData.isJewelryObject) {
+                    obj.rotation.y += obj.userData.spinSpeed;
+                    obj.position.y = obj.userData.baseY + Math.sin(time * 1.2 + obj.userData.pulse) * 0.22;
+                    obj.position.x = obj.userData.baseX + Math.cos(time * obj.userData.orbitSpeed + obj.userData.pulse) * obj.userData.orbitAmp;
+                    obj.position.z = obj.userData.baseZ + Math.sin(time * obj.userData.orbitSpeed + obj.userData.pulse) * (obj.userData.orbitAmp * 0.55);
                 }
             });
 
